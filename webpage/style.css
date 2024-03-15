@@ -1,0 +1,18 @@
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    font-family: Arial, sans-serif;
+}
+
+.captcha-container {
+    text-align: center;
+}
+
+.captcha-images img {
+    width: 100px;
+    height: 100px;
+    margin: 10px;
+}
