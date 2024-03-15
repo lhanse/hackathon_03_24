@@ -15,7 +15,6 @@ def setup():
     )
     return client
 
-
 def answer_user_question(client: AzureOpenAI, prompt_history):
     max_retries = 3
     allowed_responses = ["yes", "no", "unclear", "irrelevant", "not a yes or no question"]
@@ -62,3 +61,4 @@ if __name__ == "__main__":
         prompt_history.append({"role": response_role, "content": response_content})
         # show response to user
         print(response_content)
+
