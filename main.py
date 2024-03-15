@@ -1,18 +1,24 @@
-from openai import OpenAI
-
+from openai import AzureOpenAI
+import os
 
 
 def setup():
-    client = OpenAI()
-    completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair."},
-            {"role": "user", "content": "Compose a poem that explains the concept of recursion in programming."}
-        ]
+    client = AzureOpenAI(
+        azure_endpoint=os.environ.get("OPENAI_BASE_URL"),
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        api_version="2024-02-01",
+        azure_deployment="gpt-35-turbo",
     )
 
-    print(completion.choices[0].message)
+    response = client.chat.completions.create(
+        messages=[
+            {"role": "system", "content": "You are my assistent"},
+            {"role": "user", "content": "What is the best tagline for an ice cream shop?"},
+        ],
+        model="gpt-35-turbo",
+    )
+
+    print(response.choices[0].message)
 
 
 
