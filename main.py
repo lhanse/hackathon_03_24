@@ -28,7 +28,6 @@ def add_new_secret(file_path, new_secret):
     try:
         with open(file_path, 'a') as file:
             file.write(new_secret + '\n')
-        print(f"Appended '{new_secret}' to {file_path} successfully.")
     except FileNotFoundError:
         print(f"File '{file_path}' not found. Please check the path.")
     except Exception as e:
@@ -36,9 +35,8 @@ def add_new_secret(file_path, new_secret):
 
 
 def get_secret_concept(client):
-    file = "secrets.txt"
-    previous_secrets = get_previous_secrets(file)
-    print(', '.join(previous_secrets))
+    secrets_file = "secrets.txt"
+    previous_secrets = get_previous_secrets(secrets_file)
 
     secret_finder_prompts = [
         {"role": "system", "content": "You are a helpful chatbot"},
@@ -50,10 +48,8 @@ def get_secret_concept(client):
         messages=secret_finder_prompts,
         model="gpt-35-turbo"
     )
-    response_role = response.choices[0].message.role
     response_content = response.choices[0].message.content
-    print(response_content)
-    add_new_secret(file, response_content)
+    add_new_secret(secrets_file, response_content)
     return response_content
 
 def answer_user_question(client: AzureOpenAI, prompt_history):
@@ -84,19 +80,20 @@ def answer_user_question(client: AzureOpenAI, prompt_history):
 if __name__ == "__main__":
     client = setup()
 
-    game_master_prompts = [
-        {"role": "system",
-         "content": "You are a game master. You are playing a game of 'What am I?'. The user is associated with a secret object. Their goal is to guess their object. The user may ask yes or no questions regarding their object in order to gather clues. Only answer yes or no questions. Do not let the user know the secret object directly. You may answer with 'yes', 'no', 'unclear', 'irrelevant' or 'not a yes or no question'. The user's secret object is an apple"}
-    ]
+    secret_object = get_secret_concept(client)
 
-    secret = get_secret_concept(client)
+    game_master_prompts = [
+        {"role": "system", "content": "You are a game master. You are playing a game of 'What am I?'. The user is associated with a secret object. Their goal is to guess their object. The user may ask yes or no questions regarding their object in order to gather clues. Only answer yes or no questions. Do not let the user know the secret object directly. You may answer with 'yes', 'no', 'unclear', 'irrelevant' or 'not a yes or no question'. The user's secret object is: "+ secret_object}
+    ]
 
     prompt_history = game_master_prompts.copy()
     while True:
         question = input("Enter Question:")
         if question == "exit":
             break
-
+        elif secret_object in question:
+            print(f"You guessed the word {secret_object}!")
+            break
         # add user question to prompt
         prompt_history.append({"role": "user", "content": question})
         # get game master response
