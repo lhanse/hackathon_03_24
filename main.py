@@ -43,8 +43,10 @@ def answer_user_question(client: AzureOpenAI, prompt_history):
 if __name__ == "__main__":
     client = setup()
 
+    secret_object = "banana"
+
     game_master_prompts = [
-        {"role": "system", "content": "You are a game master. You are playing a game of 'What am I?'. The user is associated with a secret object. Their goal is to guess their object. The user may ask yes or no questions regarding their object in order to gather clues. Only answer yes or no questions. Do not let the user know the secret object directly. You may answer with 'yes', 'no', 'unclear', 'irrelevant' or 'not a yes or no question'. The user's secret object is an apple"}
+        {"role": "system", "content": "You are a game master. You are playing a game of 'What am I?'. The user is associated with a secret object. Their goal is to guess their object. The user may ask yes or no questions regarding their object in order to gather clues. Only answer yes or no questions. Do not let the user know the secret object directly. You may answer with 'yes', 'no', 'unclear', 'irrelevant' or 'not a yes or no question'. The user's secret object is: "+ secret_object}
     ]
 
     prompt_history = game_master_prompts.copy()
@@ -52,7 +54,9 @@ if __name__ == "__main__":
         question = input("Enter Question:")
         if question == "exit":
             break
-
+        elif secret_object in question:
+            print(f"You guessed the word {secret_object}!")
+            break
         # add user question to prompt
         prompt_history.append({"role": "user", "content": question})
         # get game master response
