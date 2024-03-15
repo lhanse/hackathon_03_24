@@ -15,6 +15,43 @@ def setup():
     )
     return client
 
+def get_previous_secrets(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            lines = [line.strip() for line in file]
+        return lines
+    except FileNotFoundError:
+        print(f"File '{file_path}' not found.")
+        return []
+
+def add_new_secret(file_path, new_secret):
+    try:
+        with open(file_path, 'a') as file:
+            file.write(new_secret + '\n')
+    except FileNotFoundError:
+        print(f"File '{file_path}' not found. Please check the path.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+
+def get_secret_concept(client):
+    secrets_file = "secrets.txt"
+    previous_secrets = get_previous_secrets(secrets_file)
+
+    secret_finder_prompts = [
+        {"role": "system", "content": "You are a helpful chatbot"},
+        {"role": "user", "content": "For the purposes of a game of 'Who am I?', in which a user is trying to guess a secret object, we need you to choose the secret. The secret object should be tangible and simple to understand. The user should not need domain specific knowledge in order to geuess the object. Your response should only contain the secret object as a single word."},
+        {"role": "user", "content": "The object should not be part of the following list: '{}'".format(', '.join(previous_secrets))}
+    ]
+
+    response = client.chat.completions.create(
+        messages=secret_finder_prompts,
+        model="gpt-35-turbo"
+    )
+    response_content = response.choices[0].message.content
+    add_new_secret(secrets_file, response_content)
+    return response_content
+
 def answer_user_question(client: AzureOpenAI, prompt_history):
     max_retries = 3
     allowed_responses = ["yes", "no", "unclear", "irrelevant", "not a yes or no question"]
@@ -44,7 +81,7 @@ def answer_user_question(client: AzureOpenAI, prompt_history):
 if __name__ == "__main__":
     client = setup()
 
-    secret_object = "coffee mug"
+    secret_object = get_secret_concept(client).lower()
 
     game_master_prompts = [
         {"role": "system", "content": "You are a game master. You are playing a game of 'What am I?'. The user is associated with a secret object. Their goal is to guess their object. The user may ask yes or no questions regarding their object in order to gather clues. Only answer yes or no questions. Do not let the user know the secret object directly. You may answer with 'yes', 'no', 'unclear', 'irrelevant' or 'not a yes or no question'. The user's secret object is: "+ secret_object}
@@ -55,7 +92,7 @@ if __name__ == "__main__":
         question = input("Enter Question:")
         if question == "exit":
             break
-        elif secret_object in question:
+        elif secret_object in question.lower():
             print(f"You guessed the word {secret_object}!")
             break
         # add user question to prompt
