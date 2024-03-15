@@ -13,3 +13,12 @@ dist/
 
 openai-env/
 .env
+
+# Idea
+.idea
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Generated images
+images
