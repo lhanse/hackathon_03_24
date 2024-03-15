@@ -74,14 +74,15 @@ def answer_user_question(client: AzureOpenAI, prompt_history):
 
         # clean response
         response_content = response_content.lower()
-        regex = re.compile('[^a-zA-Z]')
+        regex = re.compile('[^a-zA-Z\s]')
         response_content = regex.sub('', response_content)
 
         if response_content in allowed_responses:
             return response_content
         else:
             # TODO: log retry
-            pass
+            print("DEBUG: "+ response_content)
+            # pass
     return "assistant", "unclear"
 
 def switch_user_assistant_keys(prompt_history):
@@ -99,7 +100,8 @@ def get_guesser_question(client: AzureOpenAI, prompt_history):
         {"role": "system",
          "content": "You are playing a game of 'What am I?'. You are associated with a secret object. You are tasked with asking yes or no questions, in order to gather clues."},
     ]
-
+    # TODO: Keep two prompt histories for the game master and guesser, so this switching is not needed
+    # TODO: This also allows for better customization of the prompt histories later on.
     prompt_history = switch_user_assistant_keys(prompt_history)
 
 
@@ -113,14 +115,15 @@ def get_guesser_question(client: AzureOpenAI, prompt_history):
 if __name__ == "__main__":
     client = setup()
 
-    secret_object = get_secret_concept(client)
+    secret_object = get_secret_concept(client).lower()
 
     prompt_history = []
     while True:
         user_question = input("Enter Question:")
         if user_question == "exit":
             break
-        elif secret_object in user_question:
+        elif secret_object in user_question.lower():
+            # TODO: Add check, so the user cant just enter an entire dictionary at once
             print(f"You guessed the word {secret_object}!")
             break
         # add user question to prompt
@@ -133,6 +136,7 @@ if __name__ == "__main__":
         # show response to user
         print(game_master_answer)
 
+
         # get question from guesser
         guesser_question = get_guesser_question(client, prompt_history)
         # show guesser question to user
@@ -140,6 +144,8 @@ if __name__ == "__main__":
         # add guesser question to prompt
         prompt_history.append({"role": "user", "content": guesser_question})
 
+        # TODO: rewrite the user/guesser and game master interaction, so this code block is not needed twice
+        # TODO: add a general winning check for the user/guesser at the same time
         # get game master response
         game_master_answer = answer_user_question(client, prompt_history)
         # add response to prompt history
