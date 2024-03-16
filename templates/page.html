@@ -14,11 +14,11 @@
         <input type="submit" value="Submit">
       </form>
       <table>
-      {% for i in range(game.game_master.prompt_history.__len__()-2 ,5 , -2) %}
-      <tr style="background-color: {{'#A9F5A9' if game.game_master.prompt_history[i+1].content == 'yes' else '#F78181' if game.game_master.prompt_history[i+1].content == 'no' else '#BDBDBD'}};">
-        <td><h3>{{"User" if i % 4 == 1 else "Opponent" }}: </h3></td>
-        <td><h3>{{game.game_master.prompt_history[i].content}}</h3></td>
-        <td><h3>{{game.game_master.prompt_history[i+1].content}}</h3></td>
+      {% for line in game.frontend_output %}
+      <tr style="background-color: {{'#A9F5A9' if 'yes' in line['answer'].lower()  else '#F78181' if 'no' in line['answer'].lower() else '#BDBDBD'}};">
+        <td><h3>{{"User" if line['user'] else "Opponent" }}: </h3></td>
+        <td><h3>{{line['question']}}</h3></td>
+        <td><h3>{{line['answer']}}</h3></td>
       </h3></tr>
       {% endfor %}
       </table>

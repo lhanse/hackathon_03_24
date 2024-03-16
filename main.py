@@ -209,6 +209,7 @@ class Game:
         self.guesser = Guesser('Guesser', self.client)
         self.app = setup_web_app(self.game_master.prompt_history)
         self.status = None
+        self.frontend_output = []
 
     def handle_user_input(self, user_question):
         self.status = None
@@ -229,6 +230,7 @@ class Game:
 
         # Display game master response
         print(game_master_response)
+        self.frontend_output.insert(0, {"user": True, "question": user_question, "answer": game_master_response})
 
         # Guesser Turn
         # Idea: Only add history, if the game master's answer was not 'unclear'?
@@ -251,6 +253,7 @@ class Game:
 
         # Display game master response
         print(game_master_response)
+        self.frontend_output.insert(0, {"user": False, "question": guesser_question, "answer": game_master_response})
 
 if __name__ == "__main__":
     game = Game()
