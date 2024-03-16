@@ -213,10 +213,10 @@ class Game:
     def handle_user_input(self, user_question):
         self.status = None
         if user_question == "exit":
+            self.__init__()
             self.status = "Quit!"
             return
-        elif self.secret_object in user_question.lower():
-            # TODO: Add check, so the user cant just enter an entire dictionary at once
+        elif self.secret_object in user_question.lower()[:40]:
             winning_message = f"You guessed the word {self.secret_object}!"
             print(winning_message)
             self.__init__()
@@ -235,7 +235,12 @@ class Game:
         self.guesser.append_prompt_history({"role": "assistant", "content": user_question})
         self.guesser.append_prompt_history({"role": "user", "content": game_master_response})
         guesser_question = self.guesser.get_responses()
-        # TODO: Add winning check for the guesser
+        if self.secret_object in guesser_question.lower():
+            losing_message = f"The opponent guessed the word {self.secret_object}!"
+            print(losing_message)
+            self.__init__()
+            self.status = losing_message
+            return
 
         # Display guesser question
         print(guesser_question)
