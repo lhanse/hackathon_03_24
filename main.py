@@ -52,105 +52,115 @@ def get_secret_concept(client):
     add_new_secret(secrets_file, response_content)
     return response_content
 
-def answer_user_question(client: AzureOpenAI, prompt_history):
-    init_game_master_prompts = [
+
+class LLMAgent:
+    init_prompts = []
+    prompt_history = []
+
+    def __init__(self, name, client):
+        self.name = name
+        self.client = client
+        self.prompt_history.extend(self.init_prompts)
+
+    def append_prompt_history(self, prompt):
+        self.prompt_history.append(prompt)
+
+    def get_responses(self):
+        response = self.client.chat.completions.create(
+            messages=self.prompt_history,
+            model="gpt-35-turbo"
+        )
+        response_content = response.choices[0].message.content
+        self.append_prompt_history({"role": "assistant", "content": response_content})
+        return response_content
+
+
+class GameMaster(LLMAgent):
+    max_retries = 3
+    allowed_responses = ["yes", "no", "unclear", "irrelevant", "not a yes or no question"]
+
+    init_prompts = [
         {"role": "system",
-         "content": "You are a game master. You are playing a game of 'What am I?'. The user is associated with a secret object. Their goal is to guess their object. The user may ask yes or no questions regarding their object in order to gather clues. Only answer yes or no questions. Do not let the user know the secret object directly. You may answer with 'yes', 'no', 'unclear', 'irrelevant' or 'not a yes or no question'. The user's secret object is: " + secret_object},
+         "content": "You are a game master. You are playing a game of 'What am I?'. The user is associated with a secret object. Their goal is to guess their object. The user may ask yes or no questions regarding their object in order to gather clues. Only answer yes or no questions. Do not let the user know the secret object directly. You may answer with 'yes', 'no', 'unclear', 'irrelevant' or 'not a yes or no question'. The user's secret object is: {}"},
         {"role": "user", "content": "Do you like icecream?"},
         {"role": "assistant", "content": "irrelevant"},
         {"role": "user", "content": "How tall is the object?"},
         {"role": "assistant", "content": "not a yes or no question"},
     ]
 
-    max_retries = 3
-    allowed_responses = ["yes", "no", "unclear", "irrelevant", "not a yes or no question"]
-    # print(init_game_master_prompts + prompt_history)
-    for i in range(max_retries):
-        response = client.chat.completions.create(
-            messages=init_game_master_prompts + prompt_history,
-            model="gpt-35-turbo"
-        )
-        response_content = response.choices[0].message.content
+    def __init__(self, name, client, secret):
+        self.init_prompts[0]["content"] = self.init_prompts[0]["content"].format(secret)
+        super().__init__(name, client)
 
-        # clean response
-        response_content = response_content.lower()
-        regex = re.compile('[^a-zA-Z\s]')
-        response_content = regex.sub('', response_content)
+    def get_responses(self):
+        for i in range(self.max_retries):
+            response = self.client.chat.completions.create(
+                messages=self.prompt_history,
+                model="gpt-35-turbo"
+            )
+            response_content = response.choices[0].message.content
 
-        if response_content in allowed_responses:
-            return response_content
-        else:
-            # TODO: log retry
-            print("DEBUG: "+ response_content)
-            # pass
-    return "assistant", "unclear"
+            # clean response
+            response_content = response_content.lower()
+            regex = re.compile('[^a-zA-Z\s]')
+            response_content = regex.sub('', response_content)
 
-def switch_user_assistant_keys(prompt_history):
-    new_prompt_history = []
-    for prompt in prompt_history:
-        if prompt['role'] == "user":
-            prompt['role'] = 'assistant'
-        elif prompt['role'] == "assistant":
-            prompt['role'] = 'user'
-        new_prompt_history.append(prompt)
-    return new_prompt_history
+            if response_content in self.allowed_responses:
+                self.append_prompt_history({"role": "assistant", "content": response_content})
+                return response_content
+            else:
+                # TODO: log retry
+                print("DEBUG: " + response_content)
+        response_content = "unclear"
+        self.append_prompt_history({"role": "assistant", "content": response_content})
+        return response_content
 
-def get_guesser_question(client: AzureOpenAI, prompt_history):
-    init_guesser_prompts = [
+
+class Guesser(LLMAgent):
+
+    init_prompts = [
         {"role": "system",
          "content": "You are playing a game of 'What am I?'. You are associated with a secret object. You are tasked with asking yes or no questions, in order to gather clues."},
     ]
-    # TODO: Keep two prompt histories for the game master and guesser, so this switching is not needed
-    # TODO: This also allows for better customization of the prompt histories later on.
-    prompt_history = switch_user_assistant_keys(prompt_history)
 
-
-    response = client.chat.completions.create(
-        messages=init_guesser_prompts + prompt_history,
-        model="gpt-35-turbo"
-    )
-    response_content = response.choices[0].message.content
-    return response_content
 
 if __name__ == "__main__":
     client = setup()
 
     secret_object = get_secret_concept(client).lower()
 
-    prompt_history = []
+    game_master = GameMaster('Game Master', client, secret_object)
+    guesser = Guesser('Guesser', client)
+
     while True:
-        user_question = input("Enter Question:")
+        # Player Turn
+        user_question = input("Enter Question: ")
         if user_question == "exit":
             break
         elif secret_object in user_question.lower():
             # TODO: Add check, so the user cant just enter an entire dictionary at once
             print(f"You guessed the word {secret_object}!")
             break
-        # add user question to prompt
-        prompt_history.append({"role": "user", "content": user_question})
 
-        # get game master response
-        game_master_answer = answer_user_question(client, prompt_history)
-        # add response to prompt history
-        prompt_history.append({"role": "assistant", "content": game_master_answer})
-        # show response to user
-        print(game_master_answer)
+        # Game Master Turn
+        game_master.append_prompt_history({"role": "user", "content": user_question})
+        game_master_response = game_master.get_responses()
 
+        # Display game master response
+        print(game_master_response)
 
-        # get question from guesser
-        guesser_question = get_guesser_question(client, prompt_history)
-        # show guesser question to user
+        # Guesser Turn
+        guesser.append_prompt_history({"role": "assistant", "content": user_question})
+        guesser.append_prompt_history({"role": "user", "content": game_master_response})
+        guesser_question = guesser.get_responses()
+        # TODO: Add winning check for the guesser
+
+        # Display guesser question
         print(guesser_question)
-        # add guesser question to prompt
-        prompt_history.append({"role": "user", "content": guesser_question})
 
-        # TODO: rewrite the user/guesser and game master interaction, so this code block is not needed twice
-        # TODO: add a general winning check for the user/guesser at the same time
-        # get game master response
-        game_master_answer = answer_user_question(client, prompt_history)
-        # add response to prompt history
-        prompt_history.append({"role": "assistant", "content": game_master_answer})
-        # show response to user
-        print(game_master_answer)
+        # Game Master Turn
+        game_master.append_prompt_history({"role": "user", "content": guesser_question})
+        game_master_response = game_master.get_responses()
 
-
+        # Display game master response
+        print(game_master_response)
