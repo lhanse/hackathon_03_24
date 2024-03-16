@@ -18,16 +18,16 @@ def setup():
     )
     return client
 
-def setup_web_app(prompt_history):
+def setup_web_app(game):
     app = Flask(__name__)
     @app.route('/', methods = ['POST', 'GET'])
     def index():
         if request.method == 'GET':
-            return render_template('page.html', form_data= {})
+            return render_template('page.html', game = game)
         if request.method == 'POST':
-            form_data = request.form
-            prompt_history.append(form_data)
-            return render_template('page.html', prompt_history = prompt_history)
+            user_question = request.form['user_question']
+            game.handle_user_input(user_question)
+            return render_template('page.html', game = game)
         
     return app
 
@@ -196,8 +196,9 @@ class Game:
 if __name__ == "__main__":
     game = Game()
 
-    app = setup_web_app(game.game_master.prompt_history)
-    # app.run(host='localhost', port=5000, debug=True)
+    app = setup_web_app(game)
+    app.run(host='localhost', port=5000, debug=True)
+
     while game.running:
         # Player Turn
         user_question = input("Enter Question: ")
