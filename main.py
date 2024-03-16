@@ -18,16 +18,16 @@ def setup():
     )
     return client
 
-def setup_web_app(prompt_history):
+def setup_web_app(game):
     app = Flask(__name__)
     @app.route('/', methods = ['POST', 'GET'])
     def index():
         if request.method == 'GET':
-            return render_template('page.html', form_data= {})
+            return render_template('page.html', game = game)
         if request.method == 'POST':
-            form_data = request.form
-            prompt_history.append(form_data)
-            return render_template('page.html', prompt_history = prompt_history)
+            user_question = request.form['user_question']
+            game.handle_user_input(user_question)
+            return render_template('page.html', game = game)
         
     return app
 
@@ -208,15 +208,19 @@ class Game:
         self.game_master = GameMaster('Game Master', self.client, self.secret_object)
         self.guesser = Guesser('Guesser', self.client)
         self.app = setup_web_app(self.game_master.prompt_history)
+        self.status = None
 
     def handle_user_input(self, user_question):
+        self.status = None
         if user_question == "exit":
-            self.running = False
+            self.status = "Quit!"
             return
         elif self.secret_object in user_question.lower():
             # TODO: Add check, so the user cant just enter an entire dictionary at once
-            print(f"You guessed the word {self.secret_object}!")
-            self.running = False
+            winning_message = f"You guessed the word {self.secret_object}!"
+            print(winning_message)
+            self.__init__()
+            self.status = winning_message
             return
 
         # Game Master Turn
@@ -246,8 +250,9 @@ class Game:
 if __name__ == "__main__":
     game = Game()
 
-    app = setup_web_app(game.game_master.prompt_history)
-    # app.run(host='localhost', port=5000, debug=True)
+    app = setup_web_app(game)
+    app.run(host='localhost', port=5000, debug=True)
+
     while game.running:
         # Player Turn
         user_question = input("Enter Question: ")
