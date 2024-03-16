@@ -103,21 +103,70 @@ class LLMAgent:
 
 
 class GameMaster(LLMAgent):
-    max_retries = 3
+    max_retries = 5
+    secret_reminder_intervals = 5
     allowed_responses = ["yes", "no", "unclear", "irrelevant", "not a yes or no question"]
 
     def __init__(self, name, client, secret):
+        self.secret = secret
+        self.secret_reminder = 0
         self.init_prompts = [
             {"role": "system",
-             "content": "You are a game master. You are playing a game of 'What am I?'. The user is associated with a secret object. Their goal is to guess their object. The user may ask yes or no questions regarding their object in order to gather clues. Only answer yes or no questions. Do not let the user know the secret object directly. You may answer with 'yes', 'no', 'unclear', 'irrelevant' or 'not a yes or no question'. The user's secret object is: {}".format(secret)},
+             "content": "You are a game master. You are playing a game of 'What am I?'. The user is associated with a secret object. Their goal is to guess their object. The user may ask yes or no questions regarding their object in order to gather clues. Only answer yes or no questions. Do not let the user know the secret object directly. Your answer may confirm or deny the user's question. You may also let the player know, that a question is irrelevant, if it has nothing to do with the game. You dont have to answer the question is this case. You should only answer yes or no questions, otherwise let the player know and request a valid yes or no question. You should not provide the user with hints. You should not provide the user with examplary or good questions. The user's secret object is: {}".format(secret)},
             {"role": "user", "content": "Do you like icecream?"},
-            {"role": "assistant", "content": "irrelevant"},
+            {"role": "assistant", "content": "Irrelevant."},
             {"role": "user", "content": "How tall is the object?"},
-            {"role": "assistant", "content": "not a yes or no question"},
+            {"role": "assistant", "content": "That is not a yes or no question."},
         ]
         super().__init__(name, client)
 
+    def is_answer_clean_of_hints(self, answer):
+        if self.secret in answer:
+            return False
+
+        init_prompts = [
+            {"role": "system",
+             "content": "You are tasked with validating answers a user provides in a game of 'Who am I?'. The user is has to answer yes or no questions about a secret object. However, they sometimes add more information to their answers than they should. They are allowed to answer the question or comment, if the question does not fully apply. They are not allowed to lead the guesser and give hints. Respond to the users answer using 'hints found', if it does contain hints and 'clean', if it doesn't. Your answer should only contain a single word. The secret object the user is answering questions about is: {}".format(self.secret)},
+            {"role": "user", "content": "No. However, some {} are made out of wood".format(self.secret)},
+            {"role": "assistant", "content": "Hints found."},
+            {"role": "user", "content": "This question is irrelevant."},
+            {"role": "assistant", "content": "Clean."},
+            {"role": "user", "content": "Yes."},
+            {"role": "assistant", "content": "Clean."},
+            {"role": "user", "content": "No."},
+            {"role": "assistant", "content": "Clean."},
+            {"role": "user", "content": "I'm sorry, but I cannot provide hints in this game. Please continue asking yes or no questions to gather clues about your object."},
+            {"role": "assistant", "content": "Clean."},
+            {"role": "user", "content": "A good question would be to ask about the secret object's size."},
+            {"role": "assistant", "content": "Hints found."},
+            {"role": "user", "content": "Is my object used for sitting?"},
+            {"role": "assistant", "content": "Hints found."},
+            {"role": "user", "content": "Your purpose is primarily practical."},
+            {"role": "assistant", "content": "Clean."},
+            {"role": "user", "content": "No, you are not made of plastic."},
+            {"role": "assistant", "content": "Clean."},
+            {"role": "user", "content": "It depends on the specific context and use of the object."},
+            {"role": "assistant", "content": "Clean."},
+            {"role": "user", "content": "I'm sorry if the game became challenging. The secret object you were associated with is a {}. Thank you for playing!".format(self.secret)},
+            {"role": "assistant", "content": "Hints found."},
+        ]
+        init_prompts.append({"role": "user", "content": answer})
+        response = self.client.chat.completions.create(
+            messages=init_prompts,
+            model="gpt-35-turbo"
+        )
+        response_content = response.choices[0].message.content
+        if 'clean' in response_content.lower():
+            return True
+        else:
+            print("DEBUG <game master> : Is '{}' clean?: {}".format(answer, response_content))
+            return False
+
     def get_responses(self):
+        self.secret_reminder = (self.secret_reminder + 1) % self.secret_reminder_intervals
+        if self.secret_reminder == 0:
+            self.append_prompt_history({"role": "system", "content": "Hint: The user's secret object is: {}".format(self.secret)})
+
         for i in range(self.max_retries):
             response = self.client.chat.completions.create(
                 messages=self.prompt_history,
@@ -126,17 +175,18 @@ class GameMaster(LLMAgent):
             response_content = response.choices[0].message.content
 
             # clean response
-            response_content = response_content.lower()
-            regex = re.compile('[^a-zA-Z\s]')
-            response_content = regex.sub('', response_content)
+            # response_content = response_content.lower()
+            # regex = re.compile('[^a-zA-Z\s]')
+            # response_content = regex.sub('', response_content)
 
-            if response_content in self.allowed_responses:
+            if self.is_answer_clean_of_hints(response_content):
                 self.append_prompt_history({"role": "assistant", "content": response_content})
                 return response_content
+           # if response_content in self.allowed_responses:
             else:
-                # TODO: log retry
-                print("DEBUG <game master> : " + response_content)
-        response_content = "unclear"
+               print("DEBUG <game master> : " + response_content)
+
+        response_content = "Sorry, I can't answer that."
         self.append_prompt_history({"role": "assistant", "content": response_content})
         return response_content
 
