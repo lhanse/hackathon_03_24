@@ -158,15 +158,19 @@ class Game:
         self.game_master = GameMaster('Game Master', self.client, self.secret_object)
         self.guesser = Guesser('Guesser', self.client)
         self.app = setup_web_app(self.game_master.prompt_history)
+        self.status = None
 
     def handle_user_input(self, user_question):
+        self.status = None
         if user_question == "exit":
-            self.running = False
+            self.status = "Quit!"
             return
         elif self.secret_object in user_question.lower():
             # TODO: Add check, so the user cant just enter an entire dictionary at once
-            print(f"You guessed the word {self.secret_object}!")
-            self.running = False
+            winning_message = f"You guessed the word {self.secret_object}!"
+            print(winning_message)
+            self.__init__()
+            self.status = winning_message
             return
 
         # Game Master Turn
