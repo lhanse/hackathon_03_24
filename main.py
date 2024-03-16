@@ -1,3 +1,5 @@
+import random
+
 from openai import AzureOpenAI
 import os
 from dotenv import load_dotenv
@@ -38,34 +40,46 @@ def get_secret_concept(client):
     secrets_file = "secrets.txt"
     previous_secrets = get_previous_secrets(secrets_file)
 
+    max_retries = 3
+
     secret_finder_prompts = [
         {"role": "system", "content": "You are a helpful chatbot"},
-        {"role": "user", "content": "For the purposes of a game of 'Who am I?', in which a user is trying to guess a secret object, we need you to choose the secret. The secret object should be tangible and simple to understand. The user should not need domain specific knowledge in order to geuess the object. Your response should only contain the secret object as a single word."},
+        {"role": "user", "content": "For the purposes of a game of 'Who am I?', in which a user is trying to guess a secret object, we need you to choose the secret. The secret object should be tangible and simple to understand. The user should not need domain specific knowledge in order to geuess the object. Your response should only contain the secret object as a single word and must not contain additional words or spaces."},
         {"role": "user", "content": "The object should not be part of the following list: '{}'".format(', '.join(previous_secrets))}
     ]
 
-    response = client.chat.completions.create(
-        messages=secret_finder_prompts,
-        model="gpt-35-turbo"
-    )
-    response_content = response.choices[0].message.content
-    add_new_secret(secrets_file, response_content)
-    return response_content
+    for i in range(max_retries):
+        response = client.chat.completions.create(
+            messages=secret_finder_prompts,
+            model="gpt-35-turbo"
+        )
+        response_content = response.choices[0].message.content
+        # response cleanup
+        response_content = response_content.lower()
+        regex = re.compile('[^a-zA-Z\s]')
+        response_content = regex.sub('', response_content)
+
+        if len(response_content) < 30 and ',' not in response_content and response_content.count(' ') <= 1:
+            add_new_secret(secrets_file, response_content)
+            return response_content
+        else:
+            print("DEBUG <secret_finder> : " + response_content)
+    return random.choice(previous_secrets)
 
 
 class LLMAgent:
-    init_prompts = []
-    prompt_history = []
 
     def __init__(self, name, client):
         self.name = name
         self.client = client
+        self.prompt_history = []
         self.prompt_history.extend(self.init_prompts)
 
     def append_prompt_history(self, prompt):
         self.prompt_history.append(prompt)
 
     def get_responses(self):
+        print(self.prompt_history)
         response = self.client.chat.completions.create(
             messages=self.prompt_history,
             model="gpt-35-turbo"
@@ -79,17 +93,15 @@ class GameMaster(LLMAgent):
     max_retries = 3
     allowed_responses = ["yes", "no", "unclear", "irrelevant", "not a yes or no question"]
 
-    init_prompts = [
-        {"role": "system",
-         "content": "You are a game master. You are playing a game of 'What am I?'. The user is associated with a secret object. Their goal is to guess their object. The user may ask yes or no questions regarding their object in order to gather clues. Only answer yes or no questions. Do not let the user know the secret object directly. You may answer with 'yes', 'no', 'unclear', 'irrelevant' or 'not a yes or no question'. The user's secret object is: {}"},
-        {"role": "user", "content": "Do you like icecream?"},
-        {"role": "assistant", "content": "irrelevant"},
-        {"role": "user", "content": "How tall is the object?"},
-        {"role": "assistant", "content": "not a yes or no question"},
-    ]
-
     def __init__(self, name, client, secret):
-        self.init_prompts[0]["content"] = self.init_prompts[0]["content"].format(secret)
+        self.init_prompts = [
+            {"role": "system",
+             "content": "You are a game master. You are playing a game of 'What am I?'. The user is associated with a secret object. Their goal is to guess their object. The user may ask yes or no questions regarding their object in order to gather clues. Only answer yes or no questions. Do not let the user know the secret object directly. You may answer with 'yes', 'no', 'unclear', 'irrelevant' or 'not a yes or no question'. The user's secret object is: {}".format(secret)},
+            {"role": "user", "content": "Do you like icecream?"},
+            {"role": "assistant", "content": "irrelevant"},
+            {"role": "user", "content": "How tall is the object?"},
+            {"role": "assistant", "content": "not a yes or no question"},
+        ]
         super().__init__(name, client)
 
     def get_responses(self):
@@ -110,7 +122,7 @@ class GameMaster(LLMAgent):
                 return response_content
             else:
                 # TODO: log retry
-                print("DEBUG: " + response_content)
+                print("DEBUG <game master> : " + response_content)
         response_content = "unclear"
         self.append_prompt_history({"role": "assistant", "content": response_content})
         return response_content
@@ -118,16 +130,19 @@ class GameMaster(LLMAgent):
 
 class Guesser(LLMAgent):
 
-    init_prompts = [
-        {"role": "system",
-         "content": "You are playing a game of 'What am I?'. You are associated with a secret object. You are tasked with asking yes or no questions, in order to gather clues."},
-    ]
+    def __init__(self, name, client):
+        self.init_prompts = [
+            {"role": "system",
+             "content": "You are playing a game of 'What am I?'. You are associated with a secret object. You are tasked with asking yes or no questions, in order to gather clues."},
+        ]
+        super().__init__(name, client)
 
 
 if __name__ == "__main__":
     client = setup()
 
-    secret_object = get_secret_concept(client).lower()
+    for i in range(12):
+        secret_object = get_secret_concept(client)
 
     game_master = GameMaster('Game Master', client, secret_object)
     guesser = Guesser('Guesser', client)
