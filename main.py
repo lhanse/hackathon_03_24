@@ -261,8 +261,8 @@ if __name__ == "__main__":
     app = setup_web_app(game)
     app.run(host='localhost', port=5000, debug=True)
 
-    while game.running:
+    # while game.running:
         # Player Turn
-        user_question = input("Enter Question: ")
-        game.handle_user_input(user_question=user_question)
+        # user_question = input("Enter Question: ")
+        # game.handle_user_input(user_question=user_question)
         

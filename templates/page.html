@@ -7,11 +7,11 @@
     <center>
       <h1>{{game.status if game.status}}</h1>
       <form method="post">
-        <input style="background-color:#f5fdcf; height: 30px; width: 40%;" type="text" name="user_question"
+        <input style="border-radius: 25px; padding-left: 10px; background-color:#f5fdcf; height: 30px; width: 40%;" type="text" name="user_question"
           placeholder="Type your question here"
           value="">
         </input>
-        <input type="submit" value="Submit" style="height: 30px; width: 80px;">
+        <input type="submit" value="Submit" style="border-radius: 25px; padding-left: 10px; height: 30px; width: 80px;">
       </form>
       <table>
       {% for line in game.frontend_output %}
