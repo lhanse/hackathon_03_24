@@ -2,6 +2,7 @@ from openai import AzureOpenAI
 import os
 from dotenv import load_dotenv
 import re
+from flask import Flask,render_template,request
 
 def setup():
     # load .env
@@ -14,6 +15,19 @@ def setup():
         azure_deployment="gpt-35-turbo",
     )
     return client
+
+def setup_web_app(prompt_history):
+    app = Flask(__name__)
+    @app.route('/', methods = ['POST', 'GET'])
+    def index():
+        if request.method == 'GET':
+            return render_template('page.html', form_data= {})
+        if request.method == 'POST':
+            form_data = request.form
+            prompt_history.append(form_data)
+            return render_template('page.html', prompt_history = prompt_history)
+        
+    return app
 
 def get_previous_secrets(file_path):
     try:
@@ -123,44 +137,55 @@ class Guesser(LLMAgent):
          "content": "You are playing a game of 'What am I?'. You are associated with a secret object. You are tasked with asking yes or no questions, in order to gather clues."},
     ]
 
+class Game:
+    def __init__(self):
+        self.running = True
+        self.client = setup()
+        self.secret_object = get_secret_concept(self.client).lower()
+        self.game_master = GameMaster('Game Master', self.client, self.secret_object)
+        self.guesser = Guesser('Guesser', self.client)
+        self.app = setup_web_app(self.game_master.prompt_history)
 
-if __name__ == "__main__":
-    client = setup()
-
-    secret_object = get_secret_concept(client).lower()
-
-    game_master = GameMaster('Game Master', client, secret_object)
-    guesser = Guesser('Guesser', client)
-
-    while True:
-        # Player Turn
-        user_question = input("Enter Question: ")
+    def handle_user_input(self, user_question):
         if user_question == "exit":
-            break
-        elif secret_object in user_question.lower():
+            self.running = False
+            return
+        elif self.secret_object in user_question.lower():
             # TODO: Add check, so the user cant just enter an entire dictionary at once
-            print(f"You guessed the word {secret_object}!")
-            break
+            print(f"You guessed the word {self.secret_object}!")
+            self.running = False
+            return
 
         # Game Master Turn
-        game_master.append_prompt_history({"role": "user", "content": user_question})
-        game_master_response = game_master.get_responses()
+        self.game_master.append_prompt_history({"role": "user", "content": user_question})
+        game_master_response = self.game_master.get_responses()
 
         # Display game master response
         print(game_master_response)
 
         # Guesser Turn
-        guesser.append_prompt_history({"role": "assistant", "content": user_question})
-        guesser.append_prompt_history({"role": "user", "content": game_master_response})
-        guesser_question = guesser.get_responses()
+        self.guesser.append_prompt_history({"role": "assistant", "content": user_question})
+        self.guesser.append_prompt_history({"role": "user", "content": game_master_response})
+        guesser_question = self.guesser.get_responses()
         # TODO: Add winning check for the guesser
 
         # Display guesser question
         print(guesser_question)
 
         # Game Master Turn
-        game_master.append_prompt_history({"role": "user", "content": guesser_question})
-        game_master_response = game_master.get_responses()
+        self.game_master.append_prompt_history({"role": "user", "content": guesser_question})
+        game_master_response = self.game_master.get_responses()
 
         # Display game master response
         print(game_master_response)
+
+if __name__ == "__main__":
+    game = Game()
+
+    app = setup_web_app(game.game_master.prompt_history)
+    # app.run(host='localhost', port=5000, debug=True)
+    while game.running:
+        # Player Turn
+        user_question = input("Enter Question: ")
+        game.handle_user_input(user_question=user_question)
+        
